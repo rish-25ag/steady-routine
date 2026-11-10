@@ -38,6 +38,32 @@ You only do steps 1–3 once.
 
 Next time, run step 4 again from the `steady-routine` folder and scan the code (or pick Steady from Expo Go's recent list while the command runs).
 
+## Use it without your laptop (EAS Update, free)
+
+Publish the app to your Expo account once, and Expo Go can open it any time — laptop off, any network.
+
+One-time setup, in the `steady-routine` folder (signed in to Expo; see the login note below):
+
+```bash
+npx eas-cli@latest init
+```
+
+```bash
+npx eas-cli@latest update:configure
+```
+
+Answer **Y** to the prompts. These link the project to your Expo account and add the update settings to `app.json`.
+
+Publish (run this again whenever the app changes):
+
+```bash
+npm run publish-app
+```
+
+Then open it on the phone: the command prints an **EAS Dashboard** link. Open it, or go to expo.dev → your project → **Updates**, open the latest update and use **Preview** to open it in Expo Go (same account as on the laptop). After the first open, Steady stays in Expo Go's recent list.
+
+**Login note (Windows):** if `npx expo login` crashes while opening the browser, create a token at expo.dev → Account settings → Access tokens and run `setx EXPO_TOKEN "your-token"`, then open a new PowerShell window.
+
 ## Using the app
 
 - **Today** — what's due now, your day as a checklist, and a water warning if you fall behind.
