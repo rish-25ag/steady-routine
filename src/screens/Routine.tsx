@@ -66,6 +66,31 @@ export default function Routine({ go }: { go: (tab: string) => void }) {
       </Card>
 
       <Card>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <H size={17}>Apple Health & Watch</H>
+          <Btn title="Set up sync" small onPress={() => go('healthguide')} />
+        </View>
+        <Row>
+          <Field label="Daily step goal" keyboardType="number-pad" defaultValue={String(e.stepGoal)}
+            onEndEditing={ev => { const v = parseInt(ev.nativeEvent.text.replace(/[^0-9]/g, '')); if (v >= 1000 && v <= 50000) edit(d => { d.stepGoal = v; }); }} />
+          <Field label="Move goal (kcal)" keyboardType="number-pad" defaultValue={String(e.moveGoal)}
+            onEndEditing={ev => { const v = parseInt(ev.nativeEvent.text); if (v >= 50 && v <= 3000) edit(d => { d.moveGoal = v; }); }} />
+        </Row>
+        <Row>
+          <Field label="Exercise goal (min)" keyboardType="number-pad" defaultValue={String(e.exerciseGoal)}
+            onEndEditing={ev => { const v = parseInt(ev.nativeEvent.text); if (v >= 5 && v <= 240) edit(d => { d.exerciseGoal = v; }); }} />
+          <Field label="Stand goal (hours)" keyboardType="number-pad" defaultValue={String(e.standGoal)}
+            onEndEditing={ev => { const v = parseInt(ev.nativeEvent.text); if (v >= 1 && v <= 24) edit(d => { d.standGoal = v; }); }} />
+        </Row>
+        <T muted size={13}>Use the same Move, Exercise and Stand goals as your Watch so the bars match your rings.</T>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <T style={{ flex: 1 }}>Tick items from Watch data</T>
+          <Switch value={e.healthAutoTick} onValueChange={v => edit(d => { d.healthAutoTick = v; })} trackColor={{ true: t.accent, false: t.line }} accessibilityLabel="Tick items from Watch data" />
+        </Row>
+        <T muted size={13}>Training ticks when the Watch logs a workout or 20+ exercise minutes. Movement breaks tick when your steps are on pace for your goal at that time.</T>
+      </Card>
+
+      <Card>
         <H size={17}>Daily schedule</H>
         <T muted size={13}>Times are 24-hour (e.g. 07:30, 21:00). Changes apply when you tap Save.</T>
         {sorted.map((i, ix) => (

@@ -3,10 +3,11 @@ import { Pressable, Text, View } from 'react-native';
 import { DAY_NAMES, Item, addDays, keyOf, completion, dayMinFor, fmt12, itemsFor, noteFor, nowMin, toMin, waterPace, workoutFor, CATS } from '../data';
 import { useStore } from '../store';
 import { Btn, Card, H, Header, Label, T, catColor, useTheme } from '../ui';
+import HealthCard from './HealthCard';
 
 export default function Today({ go }: { go: (tab: string) => void }) {
   const t = useTheme();
-  const { settings, days, today, updateDay, notif, enableNotifications } = useStore();
+  const { settings, days, today, updateDay, notif, enableNotifications, sync, runShortcut } = useStore();
   const date = new Date(today + 'T12:00:00');
   const now = new Date();
   const log = days[today];
@@ -21,8 +22,9 @@ export default function Today({ go }: { go: (tab: string) => void }) {
   const toggle = (id: string) =>
     updateDay(today, d => {
       const doneMap = { ...d.done };
-      if (doneMap[id]) delete doneMap[id]; else doneMap[id] = true;
-      return { ...d, done: doneMap, waterMl: id === 'wake' && doneMap[id] && d.waterMl < 500 ? 500 : d.waterMl };
+      const auto = { ...(d.auto || {}) };
+      if (doneMap[id]) { delete doneMap[id]; auto[id] = false; /* you unticked it: syncs leave it alone */ } else doneMap[id] = true;
+      return { ...d, done: doneMap, auto, waterMl: id === 'wake' && doneMap[id] && d.waterMl < 500 ? 500 : d.waterMl };
     });
 
   const expect = settings.waterGoalMl * waterPace(settings, date);
@@ -104,13 +106,15 @@ export default function Today({ go }: { go: (tab: string) => void }) {
         </Card>
       )}
 
+      <HealthCard health={log?.health} settings={settings} sync={sync} onSync={runShortcut} onSetup={() => go('healthguide')} />
+
       {segs.map(([name, a, b]) => {
         const list = items.filter(i => { const m = dm(i.time); return m >= a && m < b; });
         if (!list.length) return null;
         return (
           <View key={name} style={{ gap: 6 }}>
             <Label style={{ paddingHorizontal: 4, paddingTop: 4 }}>{name}</Label>
-            {list.map(i => <Row key={i.id} item={i} done={done(i.id)} now={focus?.id === i.id} note={noteFor(settings, log, i, date)} onToggle={() => toggle(i.id)} />)}
+            {list.map(i => <Row key={i.id} item={i} done={done(i.id)} auto={log?.auto?.[i.id] === true && done(i.id)} now={focus?.id === i.id} note={noteFor(settings, log, i, date)} onToggle={() => toggle(i.id)} />)}
           </View>
         );
       })}
@@ -118,7 +122,7 @@ export default function Today({ go }: { go: (tab: string) => void }) {
   );
 }
 
-function Row({ item, done, now, note, onToggle }: { item: Item; done: boolean; now: boolean; note: string; onToggle: () => void }) {
+function Row({ item, done, auto, now, note, onToggle }: { item: Item; done: boolean; auto: boolean; now: boolean; note: string; onToggle: () => void }) {
   const t = useTheme();
   return (
     <Pressable onPress={onToggle} accessibilityRole="checkbox" accessibilityState={{ checked: done }} accessibilityLabel={item.title}
@@ -130,6 +134,7 @@ function Row({ item, done, now, note, onToggle }: { item: Item; done: boolean; n
           <Text style={{ flex: 1, color: done ? t.muted : t.ink, fontWeight: '700', fontSize: 15, textDecorationLine: done ? 'line-through' : 'none' }}>{item.title}</Text>
         </View>
         {!!note && <Text style={{ color: t.muted, fontSize: 13, lineHeight: 18 }}>{note}</Text>}
+        {auto && <Text style={{ color: t.accent, fontSize: 12, fontWeight: '700' }}>Ticked from Apple Watch</Text>}
       </View>
       <View style={{ width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: done ? t.accent : t.line, backgroundColor: done ? t.accent : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
         {done && <Text style={{ color: t.accentInk, fontWeight: '900', fontSize: 15 }}>✓</Text>}

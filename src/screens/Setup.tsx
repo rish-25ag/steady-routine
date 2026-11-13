@@ -8,11 +8,13 @@ export default function Setup({ go }: { go: (tab: string) => void }) {
   const { settings, saveSettings, enableNotifications, notif } = useStore();
   const [s, setS] = useState<SetupT>({ ...settings.setup });
   const [water, setWater] = useState(String(settings.waterGoalMl / 1000));
+  const [steps, setSteps] = useState(String(settings.stepGoal));
   const set = (patch: Partial<SetupT>) => setS(prev => ({ ...prev, ...patch }));
 
   const build = async () => {
     const goal = Math.round((parseFloat(water.replace(',', '.')) || 3) * 1000);
-    saveSettings({ ...settings, setup: s, setupDone: true, waterGoalMl: Math.min(6000, Math.max(1500, goal)), schedule: buildSchedule(s) });
+    const stepGoal = parseInt(steps.replace(/[^0-9]/g, '')) || settings.stepGoal;
+    saveSettings({ ...settings, setup: s, setupDone: true, waterGoalMl: Math.min(6000, Math.max(1500, goal)), stepGoal: Math.min(50000, Math.max(1000, stepGoal)), schedule: buildSchedule(s) });
     if (notif.perm === 'undetermined') await enableNotifications();
     go('today');
   };
@@ -46,6 +48,11 @@ export default function Setup({ go }: { go: (tab: string) => void }) {
         <Choice label="When do you train?" value={s.runWhen} options={[['morning', 'Morning'], ['evening', 'After log-off'], ['none', 'Not scheduled']]} onChange={v => set({ runWhen: v })} />
         {s.runWhen !== 'none' && <TimeField label="Start time" value={s.runTime} onChange={v => set({ runTime: v })} />}
         <T muted size={13}>Morning runs get a warm-up 15 min before and breakfast 90 min after. Vitamins follow 30 min after breakfast.</T>
+      </Card>
+      <Card>
+        <H size={17}>Steps</H>
+        <Field label="Daily step goal" value={steps} onChangeText={setSteps} keyboardType="number-pad" />
+        <T muted size={13}>Counted by your Apple Watch and iPhone. 8,000 suits a desk job plus regular runs.</T>
       </Card>
       <Card>
         <H size={17}>Water</H>

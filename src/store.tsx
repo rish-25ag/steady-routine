@@ -1,11 +1,28 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import * as Clipboard from 'expo-clipboard';
+import * as Linking from 'expo-linking';
 import { AppState, Platform } from 'react-native';
-import { DEFAULT_SETTINGS, DayLog, Settings, emptyDay, keyOf } from './data';
+import { CATS, DEFAULT_SETTINGS, DayLog, SHORTCUT_NAME, Settings, applyHealth, emptyDay, keyOf, parseHealthPayload } from './data';
 import { PermissionState, askPermission, permissionState, reschedule } from './notify';
 
 const KEY_SETTINGS = 'steady.settings.v1';
 const KEY_DAYS = 'steady.days.v1';
+
+export type SyncNote = { ok: boolean; text: string; at: number };
+
+/** "…?s=1&d=2" or "s=1&d=2" -> { s: '1', d: '2' }. Tolerates spaces around values. */
+export function queryFrom(text: string): Record<string, string> {
+  const q = text.includes('?') ? text.slice(text.indexOf('?') + 1) : text;
+  const out: Record<string, string> = {};
+  for (const pair of q.split(/[&\n]/)) {
+    const i = pair.indexOf('=');
+    if (i <= 0) continue;
+    try { out[decodeURIComponent(pair.slice(0, i).trim())] = decodeURIComponent(pair.slice(i + 1).trim().replace(/\+/g, ' ')); }
+    catch { out[pair.slice(0, i).trim()] = pair.slice(i + 1).trim(); }
+  }
+  return out;
+}
 
 type NotifStatus = { perm: PermissionState; scheduled: number; skipped: number; error?: string };
 
@@ -18,6 +35,10 @@ type Store = {
   saveSettings: (s: Settings) => void;
   updateDay: (key: string, fn: (d: DayLog) => DayLog) => void;
   enableNotifications: () => Promise<void>;
+  sync: SyncNote | null;
+  syncLink: string;
+  runShortcut: () => Promise<void>;
+  importFromClipboard: () => Promise<void>;
 };
 
 const Ctx = createContext<Store | null>(null);
@@ -46,6 +67,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [notif, setNotif] = useState<NotifStatus>({ perm: 'undetermined', scheduled: 0, skipped: 0 });
   const daysTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settingsRef = useRef<Settings>(DEFAULT_SETTINGS);
+  const daysRef = useRef<Record<string, DayLog>>({});
+  const [sync, setSync] = useState<SyncNote | null>(null);
+  const lastUrl = useRef<string | null>(null);
+  // Sync messages show for 10 minutes, then clear.
+  useEffect(() => {
+    if (!sync) return;
+    const timer = setTimeout(() => setSync(null), 10 * 60 * 1000);
+    return () => clearTimeout(timer);
+  }, [sync]);
+  const syncLink = Linking.createURL('sync', { queryParams: { v: '1' } });
 
   const applyNotifications = useCallback(async (s: Settings) => {
     if (Platform.OS === 'web') return; // browser preview: phone reminders only work in the app
@@ -65,7 +96,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       try {
         const [rs, rd] = await Promise.all([AsyncStorage.getItem(KEY_SETTINGS), AsyncStorage.getItem(KEY_DAYS)]);
         if (rs) s = mergeSettings(JSON.parse(rs));
-        if (rd) setDays(JSON.parse(rd));
+        if (rd) { daysRef.current = JSON.parse(rd); setDays(daysRef.current); }
       } catch {
         // Corrupt or missing data: start from defaults.
       }
@@ -98,6 +129,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const updateDay = useCallback((key: string, fn: (d: DayLog) => DayLog) => {
     setDays(prev => {
       const next = { ...prev, [key]: fn({ ...emptyDay(), ...(prev[key] || {}) }) };
+      daysRef.current = next;
       if (daysTimer.current) clearTimeout(daysTimer.current);
       daysTimer.current = setTimeout(() => { AsyncStorage.setItem(KEY_DAYS, JSON.stringify(next)).catch(() => {}); }, 300);
       return next;
@@ -110,8 +142,56 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     saveSettings({ ...settingsRef.current, notificationsOn: true });
   }, [saveSettings]);
 
+  /** Saves numbers sent by the Steady Sync shortcut and reports what changed. */
+  const importHealth = useCallback((q: Record<string, string | undefined>) => {
+    const p = parseHealthPayload(q);
+    if (!p) { setSync({ ok: false, text: 'The shortcut sent no Health numbers. Check the Steady Sync steps in Routine → Apple Health.', at: Date.now() }); return; }
+    const base = { ...emptyDay(), ...(daysRef.current[p.day] || {}) };
+    const { log, ticked } = applyHealth(settingsRef.current, base, p);
+    updateDay(p.day, () => log);
+    const added = log.runs.length - base.runs.length;
+    const names = ticked.map(id => settingsRef.current.schedule.find(i => i.id === id)?.title || CATS.move);
+    const parts = [
+      p.health.steps != null ? `${p.health.steps.toLocaleString()} steps` : '',
+      added ? `${added} Watch workout${added > 1 ? 's' : ''} logged` : '',
+      names.length ? `ticked ${names.join(', ')}` : '',
+    ].filter(Boolean);
+    setSync({ ok: true, text: 'Synced from Apple Health' + (parts.length ? ': ' + parts.join(' · ') : '') + '.', at: Date.now() });
+  }, [updateDay]);
+
+  // The shortcut ends by opening <syncLink>&s=…; handle it on launch and while open.
+  useEffect(() => {
+    if (!ready) return;
+    const handle = (url: string | null) => {
+      if (!url || url === lastUrl.current) return;
+      lastUrl.current = url;
+      const { path } = Linking.parse(url);
+      if (path && /(^|\/)sync$/.test(path)) importHealth(queryFrom(url));
+    };
+    Linking.getInitialURL().then(handle).catch(() => {});
+    const sub = Linking.addEventListener('url', e => handle(e.url));
+    return () => sub.remove();
+  }, [ready, importHealth]);
+
+  const runShortcut = useCallback(async () => {
+    try {
+      await Linking.openURL('shortcuts://run-shortcut?name=' + encodeURIComponent(SHORTCUT_NAME));
+    } catch {
+      setSync({ ok: false, text: `Couldn't open Shortcuts. Make sure a shortcut named "${SHORTCUT_NAME}" exists.`, at: Date.now() });
+    }
+  }, []);
+
+  const importFromClipboard = useCallback(async () => {
+    try {
+      const text = await Clipboard.getStringAsync();
+      importHealth(queryFrom(text || ''));
+    } catch {
+      setSync({ ok: false, text: "Couldn't read the clipboard. Allow pasting when iPhone asks.", at: Date.now() });
+    }
+  }, [importHealth]);
+
   return (
-    <Ctx.Provider value={{ ready, settings, days, today, notif, saveSettings, updateDay, enableNotifications }}>
+    <Ctx.Provider value={{ ready, settings, days, today, notif, saveSettings, updateDay, enableNotifications, sync, syncLink, runShortcut, importFromClipboard }}>
       {children}
     </Ctx.Provider>
   );

@@ -41,14 +41,29 @@ export type Settings = {
   workouts: Workout[];
   meals: Meals;
   rotationStart: string;
+  stepGoal: number;
+  moveGoal: number;
+  exerciseGoal: number;
+  standGoal: number;
+  healthAutoTick: boolean;
 };
 
-export type Run = { id: string; type: string; km: number; min: number; effort: number | null; note: string; at: number };
+export type Run = {
+  id: string; type: string; km: number; min: number; effort: number | null; note: string; at: number;
+  source?: 'watch'; key?: string; // set for workouts imported from Apple Health
+};
+/** Numbers from Apple Health via the Steady Sync shortcut. Missing fields were not sent. */
+export type Health = {
+  steps?: number; distKm?: number; move?: number; exercise?: number; stand?: number;
+  sleepH?: number; rhr?: number; syncedAt: number;
+};
 export type DayLog = {
   done: Record<string, boolean>;
   waterMl: number;
   runs: Run[];
   pick?: Partial<Record<MealSlot | 'run', number>>;
+  health?: Health;
+  auto?: Record<string, boolean>; // items ticked from Watch data
 };
 
 export const CATS: Record<Cat, string> = {
@@ -224,6 +239,11 @@ export const DEFAULT_SETTINGS: Settings = {
   workouts: DEFAULT_WORKOUTS,
   meals: DEFAULT_MEALS,
   rotationStart: ROTATION_START,
+  stepGoal: 8000,
+  moveGoal: 500,
+  exerciseGoal: 30,
+  standGoal: 12,
+  healthAutoTick: true,
 };
 
 /* ---------- derived values ---------- */
@@ -280,3 +300,128 @@ export function waterPace(settings: Settings, date: Date) {
   return Math.min(1, (n - start) / Math.max(60, end - start));
 }
 export const emptyDay = (): DayLog => ({ done: {}, waterMl: 0, runs: [] });
+
+/* ---------- Apple Health sync ---------- */
+export const SHORTCUT_NAME = 'Steady Sync';
+
+/** Integers: "8,123" or "8 123" -> 8123. */
+function num(v: string | undefined): number | undefined {
+  if (v == null) return undefined;
+  let t = String(v).trim().replace(/\s/g, '');
+  if (!t) return undefined;
+  if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, ''); // "12.345" written with dot thousands
+  t = t.replace(/,/g, '');
+  const n = parseFloat(t.replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) ? n : undefined;
+}
+/** Decimals in either locale: "5,2" -> 5.2, "1,234.5" -> 1234.5. */
+function dec(v: string | undefined): number | undefined {
+  if (v == null) return undefined;
+  let t = String(v).trim().replace(/\s/g, '');
+  if (!t) return undefined;
+  if (t.includes(',') && t.includes('.')) t = t.replace(/,/g, '');
+  else if (/^\d+,\d{1,3}$/.test(t) && !/^\d{1,3},\d{3}$/.test(t)) t = t.replace(',', '.');
+  else t = t.replace(/,/g, '');
+  const n = parseFloat(t.replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) ? n : undefined;
+}
+/** Durations as minutes: "34 min", "1 hr 5 min", "0:34:30", "7h 30m", "2040 s". Bare numbers are returned as-is (unit unknown). */
+function durMinutes(v: string | undefined): { min?: number; bare?: number } {
+  if (v == null || !String(v).trim()) return {};
+  const t = String(v).trim().toLowerCase();
+  const clock = t.match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/);
+  if (clock) {
+    const [a, b, c] = [Number(clock[1]), Number(clock[2]), clock[3] != null ? Number(clock[3]) : null];
+    return { min: c == null ? a * 60 + b : a * 60 + b + c / 60 }; // h:mm or h:mm:ss
+  }
+  if (/[a-z]/.test(t)) {
+    const unit = (re: RegExp) => { const m = t.match(re); return m ? (dec(m[1]) || 0) : 0; };
+    const h = unit(/([\d.,]+)\s*(?:h|hr|hrs|hour|hours)\b/);
+    const m = unit(/([\d.,]+)\s*(?:m|min|mins|minute|minutes)\b/);
+    const sec = unit(/([\d.,]+)\s*(?:s|sec|secs|second|seconds)\b/);
+    if (h || m || sec) return { min: h * 60 + m + sec / 60 };
+  }
+  return { bare: dec(t) };
+}
+const round = (n: number | undefined, dp = 0) => (n == null ? undefined : Math.round(n * 10 ** dp) / 10 ** dp);
+
+function workoutType(raw: string) {
+  const r = raw.toLowerCase();
+  if (r.includes('run')) return 'Run';
+  if (r.includes('walk') || r.includes('hik')) return 'Walk';
+  if (r.includes('strength') || r.includes('functional') || r.includes('core')) return 'Strength';
+  if (r.includes('yoga') || r.includes('pilates') || r.includes('flex') || r.includes('cooldown')) return 'Yoga / mobility';
+  return raw.trim().slice(0, 30) || 'Workout';
+}
+
+export type HealthPayload = { day: string; health: Health; workouts: Run[] };
+
+/**
+ * Reads the query parameters the shortcut sends:
+ * s steps, d distance km, m active kcal, e exercise min, st stand h, sl sleep (h, min or s), hr resting bpm,
+ * w workouts "type;km;minutes;HH:MM" joined by "|", day YYYY-MM-DD (optional, defaults to today).
+ */
+export function parseHealthPayload(q: Record<string, string | undefined>, now = new Date()): HealthPayload | null {
+  const sd = durMinutes(q.sl);
+  let sleep = sd.min != null ? sd.min / 60 : sd.bare;
+  if (sd.min == null && sleep != null) sleep = sleep > 1440 ? sleep / 3600 : sleep > 24 ? sleep / 60 : sleep; // seconds, minutes or hours
+  const health: Health = {
+    steps: round(num(q.s)),
+    distKm: round(dec(q.d), 2),
+    move: round(num(q.m)),
+    exercise: round(num(q.e)),
+    stand: round(num(q.st)),
+    sleepH: round(sleep, 1),
+    rhr: round(num(q.hr)),
+    syncedAt: now.getTime(),
+  };
+  const day = q.day && /^\d{4}-\d{2}-\d{2}$/.test(q.day) ? q.day : keyOf(now);
+  const workouts: Run[] = [];
+  for (const part of String(q.w || '').split(/[|\n]/)) {
+    const [type, km, min, start] = part.split(';').map(x => (x ?? '').trim());
+    if (!type) continue;
+    const md = durMinutes(min);
+    const k = dec(km) || 0, m = md.min ?? (md.bare != null && md.bare > 600 ? md.bare / 60 : md.bare) ?? 0; // >600 bare = seconds
+    if (!k && !m) continue;
+    const t = workoutType(type);
+    workouts.push({
+      id: 'hk' + uid(), type: t, km: round(k, 2) || 0, min: Math.round(m), effort: null,
+      note: 'From Apple Watch' + (start ? ` · ${start}` : ''), at: now.getTime(), source: 'watch',
+      key: [day, t, start || '', round(k, 1)].join('|'),
+    });
+  }
+  const sent = Object.entries(health).some(([k, v]) => k !== 'syncedAt' && v != null);
+  if (!sent && !workouts.length) return null;
+  return { day, health, workouts };
+}
+
+/** Merges a sync into the day and ticks items the Watch data proves. Returns the new log and what was ticked. */
+export function applyHealth(settings: Settings, log: DayLog, p: HealthPayload, now = new Date()): { log: DayLog; ticked: string[] } {
+  const prev = log.health || { syncedAt: 0 };
+  const health: Health = { ...prev, ...Object.fromEntries(Object.entries(p.health).filter(([, v]) => v != null)), syncedAt: p.health.syncedAt };
+  const keys = new Set(log.runs.map(r => r.key).filter(Boolean));
+  const runs = [...log.runs, ...p.workouts.filter(w => !keys.has(w.key))];
+  const next: DayLog = { ...log, health, runs, done: { ...log.done }, auto: { ...(log.auto || {}) } };
+  const ticked: string[] = [];
+  if (!settings.healthAutoTick || p.day !== keyOf(now)) return { log: next, ticked };
+
+  const date = new Date(p.day + 'T12:00:00');
+  const items = itemsFor(settings, date);
+  const dm = dayMinFor(settings.setup.wake);
+  const n = dm(fromMin(nowMin()));
+  const start = dm(settings.setup.wake), end = dm(settings.setup.sleep);
+  const tick = (id: string) => { if (!next.done[id] && next.auto![id] !== false) { next.done[id] = true; next.auto![id] = true; ticked.push(id); } };
+  const trained = runs.some(r => r.source === 'watch' && r.type !== 'Walk') || (health.exercise || 0) >= 20;
+  for (const i of items) {
+    const at = dm(i.time);
+    if (at > n) continue; // only items whose time has come
+    if (i.cat === 'run' && trained) tick(i.id);
+    if ((i.id === 'warm' || i.id === 'cool') && trained) tick(i.id);
+    else if (i.cat === 'move' && i.id !== 'warm' && i.id !== 'cool') {
+      const pace = Math.max(0, Math.min(1, (at - start) / Math.max(60, end - start)));
+      const stepsOnPace = (health.steps || 0) >= Math.max(1500, settings.stepGoal * pace * 0.8);
+      if (stepsOnPace || (health.exercise || 0) >= settings.exerciseGoal) tick(i.id);
+    }
+  }
+  return { log: next, ticked };
+}

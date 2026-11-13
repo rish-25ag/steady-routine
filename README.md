@@ -73,6 +73,17 @@ Then open it on the phone: the command prints an **EAS Dashboard** link. Open it
 - **Stats** — streak (days with at least 70% done), weekly completion, water, vitamins and distance.
 - **Routine** — edit every schedule item and its reminder, water goal, vitamins, workout list and meal options, or rerun setup.
 
+## Apple Watch & Apple Health (free, via Shortcuts)
+
+Expo Go can't read Apple Health directly, so a free iPhone shortcut called **Steady Sync** reads today's steps, distance, Move/Exercise/Stand, last night's sleep, resting heart rate and (optionally) Watch workouts, then opens Steady with them.
+
+- Build it once: in Steady go to **Routine → Apple Health & Watch → Set up sync** for the step-by-step guide and your personal sync link.
+- Add the shortcut to your Home Screen and open Steady from it for fresh numbers, or schedule it with a Shortcuts automation.
+- Steady shows the numbers on Today and Stats, logs Watch workouts in Train (once each), and ticks Training and movement breaks automatically (switch this off in Routine). Untick an item and later syncs leave it alone.
+- The sync link differs between `npx expo start` and the published app: copy it again from the guide after publishing.
+
+Live, automatic Health access needs a standalone app (Apple Developer account, $99/year) using a HealthKit module and an EAS build.
+
 ## Reminders
 
 - Each schedule item has a **Remind me** switch. Daily items use one reminder; weekday-only items use five (one per weekday).

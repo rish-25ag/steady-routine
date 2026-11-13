@@ -10,7 +10,7 @@ export default function Stats() {
   const date = new Date(today + 'T12:00:00');
   const rows = Array.from({ length: 7 }, (_, i) => {
     const d = addDays(date, i - 6), k = keyOf(d), dd = days[k];
-    return { k, d, pct: completion(settings, dd, d), water: dd?.waterMl || 0, km: (dd?.runs || []).reduce((s, r) => s + (+r.km || 0), 0), vits: !!dd?.done.vits };
+    return { k, d, pct: completion(settings, dd, d), water: dd?.waterMl || 0, km: (dd?.runs || []).reduce((s, r) => s + (+r.km || 0), 0), vits: !!dd?.done.vits, steps: dd?.health?.steps, sleep: dd?.health?.sleepH };
   });
 
   let streak = 0;
@@ -23,6 +23,11 @@ export default function Stats() {
   const km = rows.reduce((s, r) => s + r.km, 0);
   const vitDays = rows.filter(r => r.vits).length;
   const planKm = plannedWeekKm(settings, days, date);
+  const stepDays = rows.filter(r => r.steps != null);
+  const avgSteps = stepDays.length ? Math.round(stepDays.reduce((a, r) => a + (r.steps || 0), 0) / stepDays.length) : null;
+  const stepGoalDays = rows.filter(r => (r.steps || 0) >= settings.stepGoal).length;
+  const sleepDays = rows.filter(r => r.sleep != null);
+  const avgSleep = sleepDays.length ? sleepDays.reduce((a, r) => a + (r.sleep || 0), 0) / sleepDays.length : null;
   const any = rows.some(r => r.pct > 0 || r.water > 0 || r.km > 0);
 
   const stat = (label: string, value: string, sub: string) => (
@@ -66,6 +71,11 @@ export default function Stats() {
         {habit('Water goal hit', waterDays, 7, `${waterDays}/7 days`, t.water, 0)}
         {habit('Vitamins taken', vitDays, 7, `${vitDays}/7 days`, t.vit, 1)}
         {habit('Distance vs plan', km, planKm, `${km.toFixed(1)}/${planKm} km`, t.run, 2)}
+        {habit('Step goal hit', stepGoalDays, 7, `${stepGoalDays}/7 days`, t.accent, 3)}
+        <T muted size={13}>
+          {avgSteps != null ? `Average ${avgSteps.toLocaleString()} steps on synced days` : 'Steps appear here once Steady Sync runs'}
+          {avgSleep != null ? ` · ${avgSleep.toFixed(1)} h average sleep` : ''}.
+        </T>
       </Card>
     </View>
   );

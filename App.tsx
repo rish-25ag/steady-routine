@@ -4,6 +4,7 @@ import React, { useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, ScrollViewInstance, Text, View, useColorScheme } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Food from './src/screens/Food';
+import HealthGuide from './src/screens/HealthGuide';
 import Routine from './src/screens/Routine';
 import Setup from './src/screens/Setup';
 import Stats from './src/screens/Stats';
@@ -43,6 +44,7 @@ function Shell() {
     tab === 'stats' ? <Stats /> :
     tab === 'routine' ? <Routine go={go} /> :
     tab === 'setup' ? <Setup go={go} /> :
+    tab === 'healthguide' ? <HealthGuide go={go} /> :
     <Today go={go} />;
 
   return (
@@ -58,7 +60,7 @@ function Shell() {
       </KeyboardAvoidingView>
       <View style={{ flexDirection: 'row', backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.line, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }}>
         {TABS.map(([id, label, icon]) => {
-          const on = tab === id || (id === 'routine' && tab === 'setup');
+          const on = tab === id || (id === 'routine' && (tab === 'setup' || tab === 'healthguide'));
           return (
             <Pressable key={id} onPress={() => go(id)} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={label}
               style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, gap: 2 }}>
