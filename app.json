@@ -25,6 +25,18 @@
     },
     "plugins": [
       "expo-notifications"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "bd16085a-9951-40dc-bc9b-eb9a1f31cbb7"
+      }
+    },
+    "owner": "rishabh-25",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/bd16085a-9951-40dc-bc9b-eb9a1f31cbb7"
+    }
   }
 }
