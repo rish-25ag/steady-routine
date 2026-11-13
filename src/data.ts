@@ -304,15 +304,12 @@ export const emptyDay = (): DayLog => ({ done: {}, waterMl: 0, runs: [] });
 /* ---------- Apple Health sync ---------- */
 export const SHORTCUT_NAME = 'Steady Sync';
 
-/** Integers: "8,123" or "8 123" -> 8123. */
+/**
+ * Whole numbers. Shortcuts sends raw values with a dot decimal ("20.706"), so read them as decimals
+ * and round later; "8,123" (comma thousands) is handled by dec().
+ */
 function num(v: string | undefined): number | undefined {
-  if (v == null) return undefined;
-  let t = String(v).trim().replace(/\s/g, '');
-  if (!t) return undefined;
-  if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, ''); // "12.345" written with dot thousands
-  t = t.replace(/,/g, '');
-  const n = parseFloat(t.replace(/[^0-9.]/g, ''));
-  return Number.isFinite(n) ? n : undefined;
+  return dec(v);
 }
 /** Decimals in either locale: "5,2" -> 5.2, "1,234.5" -> 1234.5. */
 function dec(v: string | undefined): number | undefined {
@@ -408,7 +405,7 @@ export function applyHealth(settings: Settings, log: DayLog, p: HealthPayload, n
   const date = new Date(p.day + 'T12:00:00');
   const items = itemsFor(settings, date);
   const dm = dayMinFor(settings.setup.wake);
-  const n = dm(fromMin(nowMin()));
+  const n = dm(fromMin(now.getHours() * 60 + now.getMinutes()));
   const start = dm(settings.setup.wake), end = dm(settings.setup.sleep);
   const tick = (id: string) => { if (!next.done[id] && next.auto![id] !== false) { next.done[id] = true; next.auto![id] = true; ticked.push(id); } };
   const trained = runs.some(r => r.source === 'watch' && r.type !== 'Walk') || (health.exercise || 0) >= 20;
