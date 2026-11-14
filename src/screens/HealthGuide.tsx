@@ -16,7 +16,7 @@ const METRICS: [string, string, string, string][] = [
 
 export default function HealthGuide({ go }: { go: (tab: string) => void }) {
   const t = useTheme();
-  const { syncLink, runShortcut, importFromClipboard, sync } = useStore();
+  const { syncLink, runShortcut, importFromClipboard, sync, lastLink } = useStore();
   const [copied, setCopied] = useState('');
   const tail = METRICS.map(([, , v, k]) => `&${k}=[${v}]`).join('') + '&sl=[Sleep]';
 
@@ -48,6 +48,21 @@ export default function HealthGuide({ go }: { go: (tab: string) => void }) {
         {code(syncLink)}
         <Row><Btn title="Copy link" kind="primary" onPress={() => copy(syncLink, 'Link copied')} />{!!copied && <T muted size={13}>{copied}</T>}</Row>
         <T muted size={13}>This link opens this copy of Steady. If you later open Steady a different way (for example after publishing), copy the link again from here and update the shortcut.</T>
+      </Card>
+
+      <Card>
+        <Label>Last link Steady received</Label>
+        {lastLink ? (
+          <>
+            {code(lastLink.url)}
+            <T muted size={13}>
+              {new Date(lastLink.at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · {lastLink.imported ? 'numbers imported' : 'no Health numbers in this link'}
+            </T>
+            <Btn title="Copy received link" small onPress={() => copy(lastLink.url, 'Received link copied')} />
+          </>
+        ) : (
+          <T muted size={14}>None since Steady last opened. Run Steady Sync, then come back here to see exactly what arrived.</T>
+        )}
       </Card>
 
       <Card>

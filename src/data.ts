@@ -351,6 +351,9 @@ function workoutType(raw: string) {
   return raw.trim().slice(0, 30) || 'Workout';
 }
 
+/** Query keys the shortcut sends. */
+export const HEALTH_KEYS = ['s', 'd', 'm', 'e', 'st', 'sl', 'hr', 'w'];
+
 export type HealthPayload = { day: string; health: Health; workouts: Run[] };
 
 /**
@@ -394,8 +397,8 @@ export function parseHealthPayload(q: Record<string, string | undefined>, now = 
 
 /** Merges a sync into the day and ticks items the Watch data proves. Returns the new log and what was ticked. */
 export function applyHealth(settings: Settings, log: DayLog, p: HealthPayload, now = new Date()): { log: DayLog; ticked: string[] } {
-  const prev = log.health || { syncedAt: 0 };
-  const health: Health = { ...prev, ...Object.fromEntries(Object.entries(p.health).filter(([, v]) => v != null)), syncedAt: p.health.syncedAt };
+  // Each sync is a full snapshot of today: values the shortcut no longer sends are dropped.
+  const health: Health = { ...p.health };
   const keys = new Set(log.runs.map(r => r.key).filter(Boolean));
   const runs = [...log.runs, ...p.workouts.filter(w => !keys.has(w.key))];
   const next: DayLog = { ...log, health, runs, done: { ...log.done }, auto: { ...(log.auto || {}) } };

@@ -3,13 +3,14 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
 import { AppState, Platform } from 'react-native';
-import { CATS, DEFAULT_SETTINGS, DayLog, SHORTCUT_NAME, Settings, applyHealth, emptyDay, keyOf, parseHealthPayload } from './data';
+import { CATS, DEFAULT_SETTINGS, DayLog, HEALTH_KEYS, SHORTCUT_NAME, Settings, applyHealth, emptyDay, keyOf, parseHealthPayload } from './data';
 import { PermissionState, askPermission, permissionState, reschedule } from './notify';
 
 const KEY_SETTINGS = 'steady.settings.v1';
 const KEY_DAYS = 'steady.days.v1';
 
 export type SyncNote = { ok: boolean; text: string; at: number };
+export type LinkSeen = { url: string; at: number; imported: boolean };
 
 /** "…?s=1&d=2" or "s=1&d=2" -> { s: '1', d: '2' }. Tolerates spaces around values. */
 export function queryFrom(text: string): Record<string, string> {
@@ -36,6 +37,7 @@ type Store = {
   updateDay: (key: string, fn: (d: DayLog) => DayLog) => void;
   enableNotifications: () => Promise<void>;
   sync: SyncNote | null;
+  lastLink: LinkSeen | null;
   syncLink: string;
   runShortcut: () => Promise<void>;
   importFromClipboard: () => Promise<void>;
@@ -69,6 +71,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const settingsRef = useRef<Settings>(DEFAULT_SETTINGS);
   const daysRef = useRef<Record<string, DayLog>>({});
   const [sync, setSync] = useState<SyncNote | null>(null);
+  const [lastLink, setLastLink] = useState<LinkSeen | null>(null);
   const lastUrl = useRef<string | null>(null);
   // Sync messages show for 10 minutes, then clear.
   useEffect(() => {
@@ -166,7 +169,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (!url || url === lastUrl.current) return;
       lastUrl.current = url;
       const { path } = Linking.parse(url);
-      if (path && /(^|\/)sync$/.test(path)) importHealth(queryFrom(url));
+      const q = queryFrom(url);
+      // Accept the numbers whether or not Expo Go kept the /sync path.
+      const isSync = (!!path && /(^|\/)sync$/.test(path)) || HEALTH_KEYS.some(k => k in q);
+      setLastLink({ url, at: Date.now(), imported: isSync });
+      if (isSync) importHealth(q);
     };
     Linking.getInitialURL().then(handle).catch(() => {});
     const sub = Linking.addEventListener('url', e => handle(e.url));
@@ -191,7 +198,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [importHealth]);
 
   return (
-    <Ctx.Provider value={{ ready, settings, days, today, notif, saveSettings, updateDay, enableNotifications, sync, syncLink, runShortcut, importFromClipboard }}>
+    <Ctx.Provider value={{ ready, settings, days, today, notif, saveSettings, updateDay, enableNotifications, sync, lastLink, syncLink, runShortcut, importFromClipboard }}>
       {children}
     </Ctx.Provider>
   );
