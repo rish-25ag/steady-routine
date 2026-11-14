@@ -11,7 +11,7 @@ export default function Today({ go }: { go: (tab: string) => void }) {
   const date = new Date(today + 'T12:00:00');
   const now = new Date();
   const log = days[today];
-  const items = itemsFor(settings, date);
+  const items = itemsFor(settings, date, log);
   const n = nowMin();
   const done = (id: string) => !!log?.done[id];
   const pending = items.filter(i => !done(i.id));
@@ -127,7 +127,10 @@ function Row({ item, done, auto, now, note, onToggle }: { item: Item; done: bool
   return (
     <Pressable onPress={onToggle} accessibilityRole="checkbox" accessibilityState={{ checked: done }} accessibilityLabel={item.title}
       style={{ flexDirection: 'row', gap: 10, padding: 12, borderRadius: 12, backgroundColor: t.surface, borderWidth: now ? 2 : 1, borderColor: now ? t.accent : t.line, alignItems: 'flex-start' }}>
-      <Text style={{ width: 64, color: t.muted, fontSize: 13, fontVariant: ['tabular-nums'], paddingTop: 2 }}>{fmt12(item.time)}</Text>
+      <View style={{ width: 64, paddingTop: 2 }}>
+        <Text style={{ color: t.muted, fontSize: 13, fontVariant: ['tabular-nums'] }}>{fmt12(item.time)}</Text>
+        {!!item.duration && <Text style={{ color: t.muted, fontSize: 11 }}>{item.duration} min</Text>}
+      </View>
       <View style={{ flex: 1, gap: 2 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: catColor(t, item.cat) }} />

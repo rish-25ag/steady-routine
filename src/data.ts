@@ -1,7 +1,8 @@
 // Plans, defaults and pure helpers. No React or native imports here.
 
 export type Cat = 'water' | 'run' | 'food' | 'vitamin' | 'work' | 'rest' | 'move';
-export type Days = 'all' | 'weekdays' | 'weekends';
+/** How often a task happens. 'custom' uses `weekdays`; 'once' uses `date`. */
+export type Days = 'all' | 'weekdays' | 'weekends' | 'custom' | 'once';
 
 export type Item = {
   id: string;
@@ -11,7 +12,15 @@ export type Item = {
   days: Days;
   note: string;
   notify: boolean;
+  weekdays?: number[]; // for 'custom': 0 Sunday ... 6 Saturday
+  date?: string; // for 'once': YYYY-MM-DD
+  remindBefore?: number; // minutes before `time` to alert (0 = at the time)
+  duration?: number; // minutes, optional
+  paused?: boolean; // kept in Routine but hidden from Today and silent
 };
+
+export const REMIND_OPTIONS: [number, string][] = [[0, 'At the time'], [5, '5 min before'], [10, '10 min before'], [15, '15 min before'], [30, '30 min before']];
+export const SHORT_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export type Workout = { id: string; type: string; title: string; detail: string; km: number };
 export type MealSlot = 'breakfast' | 'lunch' | 'snack' | 'dinner';
@@ -64,6 +73,7 @@ export type DayLog = {
   pick?: Partial<Record<MealSlot | 'run', number>>;
   health?: Health;
   auto?: Record<string, boolean>; // items ticked from Watch data
+  skipped?: Record<string, boolean>; // tasks skipped for this day only
 };
 
 export const CATS: Record<Cat, string> = {
@@ -247,14 +257,45 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 /* ---------- derived values ---------- */
-export function itemsFor(settings: Settings, date: Date): Item[] {
+/** Whether a task is scheduled on a date (ignores pause and skips). */
+export function occursOn(i: Item, date: Date): boolean {
   const we = isWeekend(date);
+  switch (i.days) {
+    case 'all': return true;
+    case 'weekdays': return !we;
+    case 'weekends': return we;
+    case 'custom': return (i.weekdays || []).includes(date.getDay());
+    case 'once': return i.date === keyOf(date);
+    default: return false;
+  }
+}
+
+/** Today's (or any date's) tasks, without paused ones or ones skipped in that day's log. */
+export function itemsFor(settings: Settings, date: Date, log?: DayLog): Item[] {
   const dm = dayMinFor(settings.setup.wake);
   return settings.schedule
-    .filter(i => i.days === 'all' || (i.days === 'weekdays' && !we) || (i.days === 'weekends' && we))
+    .filter(i => !i.paused && occursOn(i, date) && !log?.skipped?.[i.id])
     .slice()
     .sort((a, b) => dm(a.time) - dm(b.time));
 }
+
+/** "Every day", "Mon, Wed, Fri", "Once · 20 Nov" … */
+export function repeatLabel(i: Item): string {
+  switch (i.days) {
+    case 'all': return 'Every day';
+    case 'weekdays': return 'Weekdays';
+    case 'weekends': return 'Weekends';
+    case 'custom': {
+      const w = (i.weekdays || []).slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
+      return w.length ? w.map(d => SHORT_DAYS[d]).join(', ') : 'No days chosen';
+    }
+    case 'once': return i.date ? 'Once · ' + new Date(i.date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : 'Once · no date';
+    default: return '';
+  }
+}
+
+/** A one-time task whose day has passed. */
+export const isPastOnce = (i: Item, today: string) => i.days === 'once' && !!i.date && i.date < today;
 
 const rotIndex = (settings: Settings, d: Date, n: number) => {
   const off = dayIndex(d) - dayIndex(new Date(settings.rotationStart + 'T12:00:00'));
@@ -281,7 +322,7 @@ export function noteFor(settings: Settings, log: DayLog | undefined, item: Item,
   return item.note;
 }
 export function completion(settings: Settings, log: DayLog | undefined, d: Date) {
-  const items = itemsFor(settings, d);
+  const items = itemsFor(settings, d, log);
   if (!items.length || !log) return 0;
   return items.filter(i => log.done[i.id]).length / items.length;
 }
@@ -406,7 +447,7 @@ export function applyHealth(settings: Settings, log: DayLog, p: HealthPayload, n
   if (!settings.healthAutoTick || p.day !== keyOf(now)) return { log: next, ticked };
 
   const date = new Date(p.day + 'T12:00:00');
-  const items = itemsFor(settings, date);
+  const items = itemsFor(settings, date, next);
   const dm = dayMinFor(settings.setup.wake);
   const n = dm(fromMin(now.getHours() * 60 + now.getMinutes()));
   const start = dm(settings.setup.wake), end = dm(settings.setup.sleep);

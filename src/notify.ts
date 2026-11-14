@@ -31,15 +31,28 @@ export async function askPermission(): Promise<PermissionState> {
 
 type Req = { content: Notifications.NotificationContentInput; trigger: Notifications.SchedulableNotificationTriggerInput };
 
-const WEEKDAYS = [2, 3, 4, 5, 6]; // expo: 1 = Sunday ... 7 = Saturday
-const WEEKENDS = [1, 7];
 
-function triggersFor(time: string, days: Item['days']): Notifications.SchedulableNotificationTriggerInput[] {
-  const [hour, minute] = [Math.floor(toMin(time) / 60), toMin(time) % 60];
+const WEEKLY: Record<'weekdays' | 'weekends', number[]> = { weekdays: [1, 2, 3, 4, 5], weekends: [0, 6] }; // JS 0 = Sunday
+
+/** Triggers for one task. `before` minutes earlier may cross midnight into the previous day. */
+export function triggersFor(item: Item, now = new Date()): Notifications.SchedulableNotificationTriggerInput[] {
   const channelId = Platform.OS === 'android' ? 'routine' : undefined;
-  if (days === 'all') return [{ type: Notifications.SchedulableTriggerInputTypes.DAILY, hour, minute, channelId }];
-  const list = days === 'weekdays' ? WEEKDAYS : WEEKENDS;
-  return list.map(weekday => ({ type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday, hour, minute, channelId }));
+  const before = item.remindBefore || 0;
+  let at = toMin(item.time) - before;
+  const shift = at < 0 ? -1 : 0; // fires the day before
+  at = (at + 1440) % 1440;
+  const hour = Math.floor(at / 60), minute = at % 60;
+
+  if (item.days === 'once') {
+    if (!item.date) return [];
+    const d = new Date(item.date + 'T00:00:00');
+    d.setMinutes(toMin(item.time) - before);
+    return d.getTime() > now.getTime() ? [{ type: Notifications.SchedulableTriggerInputTypes.DATE, date: d, channelId }] : [];
+  }
+  if (item.days === 'all') return [{ type: Notifications.SchedulableTriggerInputTypes.DAILY, hour, minute, channelId }];
+  const days = item.days === 'custom' ? (item.weekdays || []) : WEEKLY[item.days];
+  // expo weekday: 1 = Sunday ... 7 = Saturday
+  return days.map(d => ({ type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: ((d + shift + 7) % 7) + 1, hour, minute, channelId }));
 }
 
 function bodyFor(item: Item, settings: Settings): string {
@@ -55,19 +68,21 @@ function bodyFor(item: Item, settings: Settings): string {
 export function plan(settings: Settings): { reqs: Req[]; total: number } {
   const reqs: Req[] = [];
   for (const item of settings.schedule) {
-    if (!item.notify) continue;
-    for (const trigger of triggersFor(item.time, item.days))
-      reqs.push({ content: { title: item.title, body: bodyFor(item, settings), data: { id: item.id } }, trigger });
+    if (!item.notify || item.paused) continue;
+    const title = item.remindBefore ? `In ${item.remindBefore} min: ${item.title}` : item.title;
+    for (const trigger of triggersFor(item))
+      reqs.push({ content: { title, body: bodyFor(item, settings), data: { id: item.id } }, trigger });
   }
   const s = settings.setup;
   if (settings.waterNudge !== 'off' && s.workDays !== 'none') {
     const step = settings.waterNudge === '1h' ? 60 : 120;
-    const taken = new Set(settings.schedule.filter(i => i.notify).map(i => i.time));
+    const taken = new Set(settings.schedule.filter(i => i.notify && !i.paused).map(i => i.time));
     const end = (toMin(s.logoff) - toMin(s.login) + 1440) % 1440;
     for (let m = step; m < end; m += step) {
       const t = addMin(s.login, m);
       if (taken.has(t)) continue;
-      for (const trigger of triggersFor(t, s.workDays === 'all' ? 'all' : 'weekdays'))
+      const nudge: Item = { id: 'water', time: t, title: '', cat: 'water', days: s.workDays === 'all' ? 'all' : 'weekdays', note: '', notify: true };
+      for (const trigger of triggersFor(nudge))
         reqs.push({ content: { title: 'Drink a glass of water', body: `Goal today: ${(settings.waterGoalMl / 1000).toFixed(1)} L. Log it in Steady.`, data: { id: 'water' } }, trigger });
     }
   }

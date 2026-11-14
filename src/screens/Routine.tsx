@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { Switch, View } from 'react-native';
-import { CATS, Cat, DEFAULT_SETTINGS, Days, Item, MEAL_SLOTS, Settings, WORKOUT_TYPES, WaterNudge, dayMinFor, uid } from '../data';
+import { DEFAULT_SETTINGS, MEAL_SLOTS, Settings, WORKOUT_TYPES, WaterNudge, dayMinFor, uid } from '../data';
 import { IOS_LIMIT, plan } from '../notify';
 import { useStore } from '../store';
-import { Btn, Card, Choice, Divider, Field, H, Header, Row, T, TimeField, useTheme } from '../ui';
+import TaskList from './TaskList';
+import { Btn, Card, Choice, Divider, Field, H, Header, Row, T, useTheme } from '../ui';
 
 const clone = <X,>(x: X): X => JSON.parse(JSON.stringify(x));
 
 export default function Routine({ go }: { go: (tab: string) => void }) {
   const t = useTheme();
-  const { settings, saveSettings, notif, enableNotifications } = useStore();
+  const { settings, saveSettings, notif, enableNotifications, today, days, updateDay } = useStore();
   const [e, setE] = useState<Settings>(() => clone(settings));
   const [dirty, setDirty] = useState(false);
   const [armed, setArmed] = useState(false);
@@ -23,9 +24,7 @@ export default function Routine({ go }: { go: (tab: string) => void }) {
   }
 
   const edit = (fn: (d: Settings) => void) => { setE(prev => { const n = clone(prev); fn(n); return n; }); setDirty(true); setMsg(''); };
-  const setItem = (id: string, patch: Partial<Item>) => edit(d => { const it = d.schedule.find(i => i.id === id); if (it) Object.assign(it, patch); });
   const dm = dayMinFor(e.setup.wake);
-  const sorted = e.schedule.slice().sort((a, b) => dm(a.time) - dm(b.time));
   const preview = plan(e);
 
   const save = () => {
@@ -89,29 +88,20 @@ export default function Routine({ go }: { go: (tab: string) => void }) {
       </Card>
 
       <Card>
-        <H size={17}>Daily schedule</H>
-        <T muted size={13}>Times are 24-hour (e.g. 07:30, 21:00). Changes apply when you tap Save.</T>
-        {sorted.map((i, ix) => (
-          <View key={i.id} style={{ gap: 8 }}>
-            {ix > 0 && <Divider />}
-            <Row style={{ alignItems: 'flex-end' }}>
-              <TimeField label="Time" value={i.time} onChange={v => setItem(i.id, { time: v })} style={{ flex: 0, minWidth: 110, width: 110 }} />
-              <Field label="Title" value={i.title} onChangeText={v => setItem(i.id, { title: v.slice(0, 80) })} />
-            </Row>
-            <Choice<Cat> value={i.cat} options={Object.entries(CATS) as [Cat, string][]} onChange={v => setItem(i.id, { cat: v })} />
-            <Row style={{ justifyContent: 'space-between' }}>
-              <Choice<Days> value={i.days} options={[['all', 'Every day'], ['weekdays', 'Weekdays'], ['weekends', 'Weekends']]} onChange={v => setItem(i.id, { days: v })} />
-            </Row>
-            <Row style={{ justifyContent: 'space-between' }}>
-              <Row>
-                <Switch value={i.notify} onValueChange={v => setItem(i.id, { notify: v })} trackColor={{ true: t.accent, false: t.line }} accessibilityLabel={`Remind me: ${i.title}`} />
-                <T size={13}>Remind me</T>
-              </Row>
-              <Btn title="Remove" small kind="danger" onPress={() => edit(d => { d.schedule = d.schedule.filter(x => x.id !== i.id); })} />
-            </Row>
-          </View>
-        ))}
-        <Btn title="Add item" onPress={() => edit(d => { d.schedule.push({ id: 'c' + uid(), time: '18:00', title: 'New habit', cat: 'rest', days: 'all', note: '', notify: true }); })} />
+        <H size={17}>Tasks</H>
+        <T muted size={13}>Tap a task to change its time, repeat, reminder, duration or notes, or to pause, skip or delete it. Times are 24-hour (07:30, 21:00). Changes apply when you tap Save routine.</T>
+        <TaskList
+          items={e.schedule}
+          wake={e.setup.wake}
+          today={today}
+          todayLog={days[today]}
+          onChange={fn => edit(d => { d.schedule = fn(d.schedule); })}
+          onSkipToday={(id, skip) => updateDay(today, d => {
+            const skipped = { ...(d.skipped || {}) };
+            if (skip) skipped[id] = true; else delete skipped[id];
+            return { ...d, skipped };
+          })}
+        />
       </Card>
 
       <Card>

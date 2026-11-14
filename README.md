@@ -70,8 +70,19 @@ Then open it on the phone: the command prints an **EAS Dashboard** link. Open it
 - **Water** — log glasses or bottles against your daily goal.
 - **Train** — today's workout from your rotation (tap **Swap** to change it), log sessions with pace, next 7 days.
 - **Food** — today's meals from your rotation (swap any of them), plate rules for runners.
+- **Notes** — a daily journal (with mood and energy) plus separate titled notes you can pin; search covers both.
 - **Stats** — streak (days with at least 70% done), weekly completion, water, vitamins and distance.
-- **Routine** — edit every schedule item and its reminder, water goal, vitamins, workout list and meal options, or rerun setup.
+- **Routine** — add, edit and delete tasks; set water goal, vitamins, workout list and meal options; rerun setup.
+
+### Tasks
+
+Every task has a time, title, category, notes and optional duration, plus:
+
+- **Repeat:** every day, weekdays, weekends, chosen days (e.g. Mon/Wed/Fri), or one time on a date.
+- **Reminder:** off, at the time, or 5/10/15/30 minutes before.
+- **Pause** (kept but hidden and silent), **Skip today** (back tomorrow), or **Delete**.
+
+Adding a task asks whether it's for today only, a specific date, or repeating. Past one-time tasks can be cleared in one tap.
 
 ## Apple Watch & Apple Health (free, via Shortcuts)
 

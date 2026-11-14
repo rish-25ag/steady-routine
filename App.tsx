@@ -5,12 +5,14 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollVie
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Food from './src/screens/Food';
 import HealthGuide from './src/screens/HealthGuide';
+import Notes from './src/screens/Notes';
 import Routine from './src/screens/Routine';
 import Setup from './src/screens/Setup';
 import Stats from './src/screens/Stats';
 import Today from './src/screens/Today';
 import Train from './src/screens/Train';
 import Water from './src/screens/Water';
+import { NotesProvider } from './src/notes';
 import { StoreProvider, useStore } from './src/store';
 import { useTheme } from './src/ui';
 
@@ -20,6 +22,7 @@ const TABS: [string, string, IconName][] = [
   ['water', 'Water', 'water-outline'],
   ['train', 'Train', 'walk-outline'],
   ['food', 'Food', 'restaurant-outline'],
+  ['notes', 'Notes', 'create-outline'],
   ['stats', 'Stats', 'stats-chart-outline'],
   ['routine', 'Routine', 'time-outline'],
 ];
@@ -42,6 +45,7 @@ function Shell() {
     tab === 'train' ? <Train /> :
     tab === 'food' ? <Food go={go} /> :
     tab === 'stats' ? <Stats /> :
+    tab === 'notes' ? <Notes /> :
     tab === 'routine' ? <Routine go={go} /> :
     tab === 'setup' ? <Setup go={go} /> :
     tab === 'healthguide' ? <HealthGuide go={go} /> :
@@ -65,7 +69,7 @@ function Shell() {
             <Pressable key={id} onPress={() => go(id)} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={label}
               style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, gap: 2 }}>
               <Ionicons name={icon} size={22} color={on ? t.accent : t.muted} />
-              <Text style={{ fontSize: 11, fontWeight: '700', color: on ? t.accent : t.muted }}>{label}</Text>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: on ? t.accent : t.muted }} numberOfLines={1}>{label}</Text>
             </Pressable>
           );
         })}
@@ -78,7 +82,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StoreProvider>
-        <Shell />
+        <NotesProvider>
+          <Shell />
+        </NotesProvider>
       </StoreProvider>
     </SafeAreaProvider>
   );

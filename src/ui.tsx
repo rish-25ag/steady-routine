@@ -83,6 +83,7 @@ export function Field({ label, style, ...props }: TextInputProps & { label: stri
       <Text style={{ color: t.muted, fontSize: 12, fontWeight: '700' }}>{label}</Text>
       <TextInput
         placeholderTextColor={t.muted}
+        accessibilityLabel={label}
         {...props}
         style={{ backgroundColor: t.surface2, borderColor: t.line, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: t.ink, fontSize: 15, minHeight: props.multiline ? 90 : undefined, textAlignVertical: props.multiline ? 'top' : 'center' }}
       />
