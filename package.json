@@ -30,7 +30,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "publish-app": "expo export --platform ios --no-bytecode --dump-assetmap --output-dir dist && npx eas-cli@latest update --branch main --environment production --platform ios --skip-bundler --input-dir dist --auto"
+    "publish-app": "expo export --platform ios --no-bytecode --dump-assetmap --output-dir dist && npx eas-cli@latest update --channel main --environment production --platform ios --skip-bundler --input-dir dist --auto"
   },
   "private": true
 }
