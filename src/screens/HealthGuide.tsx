@@ -9,9 +9,8 @@ const METRICS: [string, string, string, string][] = [
   // Health type in Shortcuts, statistic, variable name, link key
   ['Steps', 'Sum', 'Steps', 's'],
   ['Walking + Running Distance', 'Sum', 'Distance', 'd'],
-  ['Active Energy', 'Sum', 'Move', 'm'],
-  ['Exercise Minutes', 'Sum', 'Exercise', 'e'],
-  ['Stand Hours', 'Sum', 'Stand', 'st'],
+  ['Active Energy (or Active Calories)', 'Sum', 'Move', 'm'],
+  ['Exercise Minutes (or Exercise Time)', 'Sum', 'Exercise', 'e'],
   ['Resting Heart Rate', 'Average', 'RHR', 'hr'],
 ];
 

@@ -79,10 +79,8 @@ export default function Routine({ go }: { go: (tab: string) => void }) {
         <Row>
           <Field label="Exercise goal (min)" keyboardType="number-pad" defaultValue={String(e.exerciseGoal)}
             onEndEditing={ev => { const v = parseInt(ev.nativeEvent.text); if (v >= 5 && v <= 240) edit(d => { d.exerciseGoal = v; }); }} />
-          <Field label="Stand goal (hours)" keyboardType="number-pad" defaultValue={String(e.standGoal)}
-            onEndEditing={ev => { const v = parseInt(ev.nativeEvent.text); if (v >= 1 && v <= 24) edit(d => { d.standGoal = v; }); }} />
         </Row>
-        <T muted size={13}>Use the same Move, Exercise and Stand goals as your Watch so the bars match your rings.</T>
+        <T muted size={13}>Use the same Move and Exercise goals as your Watch so the bars match your rings.</T>
         <Row style={{ justifyContent: 'space-between' }}>
           <T style={{ flex: 1 }}>Tick items from Watch data</T>
           <Switch value={e.healthAutoTick} onValueChange={v => edit(d => { d.healthAutoTick = v; })} trackColor={{ true: t.accent, false: t.line }} accessibilityLabel="Tick items from Watch data" />
